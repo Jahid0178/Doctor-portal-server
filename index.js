@@ -1,7 +1,9 @@
 const express = require("express");
 const admin = require("firebase-admin");
 const { MongoClient } = require("mongodb");
+const ObjectId = require("mongodb").ObjectId;
 const cors = require("cors");
+const stripe = require("stripe")(process.env.STRIPE_SECRET);
 const app = express();
 const port = process.env.PORT || 4000;
 
@@ -48,6 +50,13 @@ async function run() {
       const cursor = appointmentsCollection.find(query);
       const appointments = await cursor.toArray();
       res.send(appointments);
+    });
+
+    app.get("/appointments/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: ObjectId(id) };
+      const result = await appointmentsCollection.findOne(query);
+      res.json(result);
     });
 
     // Find email for admin
