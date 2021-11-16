@@ -4,8 +4,15 @@ const { MongoClient } = require("mongodb");
 const ObjectId = require("mongodb").ObjectId;
 const cors = require("cors");
 const stripe = require("stripe")(process.env.STRIPE_SECRET);
+const fileUpload = require("express-fileupload");
+
 const app = express();
 const port = process.env.PORT || 4000;
+
+app.use(cors());
+app.use(express.json());
+app.use(fileUpload());
+require("dotenv").config();
 
 // Firebase admin json file
 const serviceAccount = require("./doctors-portal-firebase-adminsdk.json");
@@ -13,10 +20,6 @@ const serviceAccount = require("./doctors-portal-firebase-adminsdk.json");
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
 });
-
-app.use(cors());
-app.use(express.json());
-require("dotenv").config();
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.ffuko.mongodb.net/myFirstDatabase?retryWrites=true&w=majority`;
 const client = new MongoClient(uri, {
@@ -41,6 +44,7 @@ async function run() {
     const database = client.db("doctors_portal");
     const appointmentsCollection = database.collection("appointments");
     const userCollection = database.collection("users");
+    const doctorsCollection = database.collection("doctors");
 
     // APPOINTMENT GET API
     app.get("/appointments", async (req, res) => {
@@ -56,6 +60,28 @@ async function run() {
       const id = req.params.id;
       const query = { _id: ObjectId(id) };
       const result = await appointmentsCollection.findOne(query);
+      res.json(result);
+    });
+
+    app.get("/doctors", async (req, res) => {
+      const cursor = doctorsCollection.find({});
+      const doctors = await cursor.toArray();
+      res.send(doctors);
+    });
+
+    app.post("/doctors", async (req, res) => {
+      const name = req.body.name;
+      const email = req.body.email;
+      const pic = req.files.image;
+      const picData = pic.data;
+      const encodedPic = picData.toString("base64");
+      const imageBuffer = Buffer.from(encodedPic, "base64");
+      const doctor = {
+        name,
+        email,
+        image: imageBuffer,
+      };
+      const result = await doctorsCollection.insertOne(doctor);
       res.json(result);
     });
 
@@ -103,7 +129,8 @@ async function run() {
         const requesterAccount = await userCollection.findOne({
           email: requester,
         });
-        if (requesterAccount.role === admin) {
+
+        if (requesterAccount.role === "admin") {
           const filter = { email: user.email };
           const updateDoc = { $set: { role: "admin" } };
           const options = { upsert: true };
@@ -117,6 +144,18 @@ async function run() {
       } else {
         res.status(401).json({ message: "you do not access to make admin" });
       }
+    });
+
+    // Payment API
+    app.post("/create-payment-intent", async (req, res) => {
+      const paymentInfo = req.body;
+      const amount = paymentInfo.price * 100;
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: amount,
+        currency: "usd",
+        payment_method_types: "card",
+      });
+      res.json({ clientSecret: paymentIntent.client_secret });
     });
   } finally {
     // await client.close();
