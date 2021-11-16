@@ -2,9 +2,11 @@ const express = require("express");
 const admin = require("firebase-admin");
 const { MongoClient } = require("mongodb");
 const ObjectId = require("mongodb").ObjectId;
+require("dotenv").config();
 const cors = require("cors");
-const stripe = require("stripe")(process.env.STRIPE_SECRET);
 const fileUpload = require("express-fileupload");
+
+const stripe = require("stripe")(process.env.STRIPE_SECRET);
 
 const app = express();
 const port = process.env.PORT || 4000;
@@ -12,7 +14,6 @@ const port = process.env.PORT || 4000;
 app.use(cors());
 app.use(express.json());
 app.use(fileUpload());
-require("dotenv").config();
 
 // Firebase admin json file
 const serviceAccount = require("./doctors-portal-firebase-adminsdk.json");
@@ -33,6 +34,7 @@ async function verifyToken(req, res, next) {
     try {
       const decodedUser = await admin.auth().verifyIdToken(token);
       req.decodedEmail = decodedUser.email;
+      console.log(decodedUser.email);
     } catch {}
   }
   next();
@@ -153,7 +155,7 @@ async function run() {
       const paymentIntent = await stripe.paymentIntents.create({
         amount: amount,
         currency: "usd",
-        payment_method_types: "card",
+        payment_method_types: ["card"],
       });
       res.json({ clientSecret: paymentIntent.client_secret });
     });
